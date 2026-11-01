@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>So'z yodlash</title>
+  <meta name="description" content="Ingliz tili so'zlarini yodlash ilovasi">
+
+  <!-- Brauzer paneli rangi (yorug' va tungi mavzu uchun) -->
+  <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#11131c" media="(prefers-color-scheme: dark)">
+
+  <!-- PWA sozlamalari va ikonkalar -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Barcha ekranlar shu yerga JavaScript orqali chiziladi -->
+  <main id="app" class="app"></main>
+
+  <!-- Qisqa xabarlar ("Saqlandi" va h.k.) uchun joy -->
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <!-- Zaxira faylni tanlash uchun yashirin maydon -->
+  <input type="file" id="import-file" accept=".json,application/json" hidden>
+
+  <noscript>
+    <p style="padding:16px">Ilova ishlashi uchun brauzerda JavaScript yoqilgan bo'lishi kerak.</p>
+  </noscript>
+
+  <!-- Asosiy dastur (modul sifatida yuklanadi) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
