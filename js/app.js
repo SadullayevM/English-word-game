@@ -2,17 +2,21 @@
 // app.js — Ilovaning asosiy qismi: ekranlarni chizadi
 // (bosh sahifa, bo'lim, test), tugmalarni boshqaradi va
 // ekranlar orasida o'tishni (manzil #/... orqali) boshqaradi.
-// Ma'lumotlar faqat storage.js orqali, AI esa faqat ai.js orqali ishlatiladi.
+// Ma'lumotlar faqat storage.js orqali, AI faqat ai.js orqali,
+// bulut esa faqat cloud.js va sync.js orqali ishlatiladi.
 // =============================================================
 
 import * as storage from './storage.js';
 import * as ai from './ai.js';
+import * as cloud from './cloud.js';
+import * as sync from './sync.js';
+import { isConfigured } from './config.js';
 import {
   MODES, modeLabel, normalize, cleanText, parseMeanings,
   shuffle, getPrompt, getCorrectAnswer, checkAnswer
 } from './quiz.js';
 import {
-  escapeHtml, formatDate, dateStamp, icons,
+  escapeHtml, formatDate, formatDateTime, dateStamp, icons,
   showDialog, confirmDialog, alertDialog, promptDialog, toast, showLoading
 } from './ui.js';
 
@@ -49,8 +53,8 @@ function go(hash) {
   else location.hash = hash;
 }
 
-// Manzilga mos ekranni chizadi
-async function render() {
+// Manzilga mos ekranni chizadi. keepScroll = true bo'lsa, sahifa tepaga qaytarilmaydi.
+async function render({ keepScroll = false } = {}) {
   const route = parseRoute();
   try {
     if (route.name === 'section') await renderSection(route.id);
@@ -61,7 +65,7 @@ async function render() {
     console.error(error);
     renderError();
   }
-  window.scrollTo(0, 0);
+  if (!keepScroll) window.scrollTo(0, 0);
 }
 
 // Manzil o'zgarganda (jumladan telefonning "orqaga" tugmasida) chaqiriladi.
@@ -145,6 +149,7 @@ async function renderHome() {
   app.innerHTML = `
     <header class="topbar">
       <h1 class="topbar-title">So'z yodlash</h1>
+      <a class="sync-chip" id="sync-chip" href="#/settings" title="Sinxronlash holati"></a>
       <a class="icon-btn" href="#/settings" aria-label="Sozlamalar" title="Sozlamalar">${icons.settings}</a>
     </header>
     <section class="content">
@@ -161,7 +166,7 @@ async function renderHome() {
 
       <div class="card backup-card">
         <h2 class="card-title">Zaxira nusxa</h2>
-        <p class="muted">Ma'lumotlar faqat shu qurilmada saqlanadi. Ularni yo'qotmaslik uchun vaqti-vaqti bilan zaxira faylini yuklab oling.</p>
+        <p class="muted">So'zlaringiz akkauntingiz orqali bulutda saqlanadi. Qo'shimcha ehtiyot uchun zaxira faylini ham yuklab olishingiz mumkin.</p>
         <div class="btn-row">
           <button type="button" class="btn btn-secondary" id="export-btn">${icons.download} Eksport</button>
           <button type="button" class="btn btn-secondary" id="import-btn">${icons.upload} Import</button>
@@ -169,6 +174,7 @@ async function renderHome() {
       </div>
     </section>`;
 
+  updateSyncIndicators(sync.getStatus());
   document.getElementById('add-section').addEventListener('click', handleAddSection);
   document.getElementById('export-btn').addEventListener('click', handleExport);
   document.getElementById('import-btn').addEventListener('click', () => {
@@ -631,7 +637,7 @@ function startTest(section, words, mode) {
     index: 0,                // joriy savol raqami
     wrong: [],               // noto'g'ri javoblar: { word, answer }
     correctCount: 0,
-    phase: 'answer',         // 'answer' — javob kutilmoqda, 'feedback' — natija ko'rsatilgan
+    phase: 'answer',         // 'answer' — javob kutilmoqda, 'checking' — AI tekshirmoqda, 'feedback' — natija ko'rsatilgan
     checkedAt: 0,
     active: true
   };
@@ -931,6 +937,7 @@ function renderCongrats(date) {
 async function renderSettings() {
   const enabled = Boolean(await storage.getSetting(ai.SETTING_ENABLED, false));
   const apiKey = String(await storage.getSetting(ai.SETTING_API_KEY, '') || '');
+  const session = (await cloud.getSession()) || {};
 
   app.innerHTML = `
     <header class="topbar">
@@ -938,6 +945,22 @@ async function renderSettings() {
       <h1 class="topbar-title">Sozlamalar</h1>
     </header>
     <section class="content">
+      <div class="card">
+        <h2 class="card-title">Akkaunt</h2>
+        <div class="account-row">
+          <span class="account-icon">${icons.user}</span>
+          <span class="account-text">
+            <strong>${escapeHtml(session.name || session.email || 'Google akkaunt')}</strong>
+            <small class="muted">${escapeHtml(session.email || '')}</small>
+          </span>
+        </div>
+        <p class="sync-info" id="sync-info"></p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="sync-now">${icons.refresh} Hozir sinxronlash</button>
+          <button type="button" class="btn btn-secondary btn-danger-text" id="sign-out">${icons.logout} Chiqish</button>
+        </div>
+      </div>
+
       <form class="card" id="ai-form" novalidate autocomplete="off">
         <h2 class="card-title">Sun'iy intellekt (AI)</h2>
         <p class="muted">AI ikki ishda yordam beradi: yangi so'z qo'shganda inglizcha imloni tekshiradi va Inglizcha → O'zbekcha testida boshqacha so'z bilan yozilgan, lekin ma'nosi to'g'ri javoblarni qabul qiladi.</p>
@@ -969,6 +992,10 @@ async function renderSettings() {
         </div>
       </form>
     </section>`;
+
+  updateSyncIndicators(sync.getStatus());
+  document.getElementById('sync-now').addEventListener('click', () => sync.syncNow());
+  document.getElementById('sign-out').addEventListener('click', handleSignOut);
 
   const form = document.getElementById('ai-form');
   const enabledInput = document.getElementById('ai-enabled');
@@ -1031,12 +1058,177 @@ async function renderSettings() {
 }
 
 // =============================================================
+// AKKAUNT VA SINXRONLASH: kirish ekrani, holat belgisi, chiqish
+// =============================================================
+
+// Kirish ekrani (akkauntga kirmaguncha ilovaning qolgan qismi ochilmaydi)
+function renderSignIn(errorMessage = '') {
+  const configured = isConfigured();
+  app.innerHTML = `
+    <section class="signin">
+      <div class="card signin-card">
+        <img class="signin-logo" src="icons/icon-192.png" alt="" width="72" height="72">
+        <h1 class="signin-title">So'z yodlash</h1>
+        <p class="muted">So'zlaringiz uy kompyuteri, ishxona va telefonda bir xil bo'lishi uchun Google akkauntingiz bilan kiring.</p>
+        <p class="form-error" id="signin-error" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</p>
+        ${configured ? '' : `<p class="notice">Firebase sozlamalari hali kiritilmagan: <strong>js/config.js</strong> faylini to'ldiring.</p>`}
+        <button type="button" class="btn btn-primary btn-block" id="google-signin" ${configured ? '' : 'disabled'}>
+          ${icons.user} Google bilan kirish
+        </button>
+      </div>
+    </section>`;
+
+  const button = document.getElementById('google-signin');
+  const errorBox = document.getElementById('signin-error');
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Google sahifasi ochilmoqda...';
+    try {
+      await cloud.startSignIn();
+    } catch (error) {
+      errorBox.textContent = cloud.getErrorMessage(error);
+      errorBox.hidden = false;
+      button.disabled = !isConfigured();
+      button.innerHTML = `${icons.user} Google bilan kirish`;
+    }
+  });
+}
+
+// Kirgandan keyin: boshqa akkaunt bilan kirilgan bo'lsa, eski akkauntning so'zlari o'chiriladi.
+// Birinchi marta kirilganda esa qurilmadagi so'zlar shu akkauntga qo'shiladi.
+async function prepareAccount(session) {
+  const previousUid = await storage.getSetting('accountUid', null);
+  if (previousUid && previousUid !== session.uid) {
+    await storage.clearLocalData();
+  }
+  await storage.setSetting('accountUid', session.uid);
+}
+
+// Sinxronlash holatining qisqa va to'liq matnini qaytaradi
+function describeSync(status) {
+  const last = status.lastSyncAt ? `Oxirgi sinxronlash: ${formatDateTime(status.lastSyncAt)}` : 'Hali sinxronlanmagan';
+  switch (status.state) {
+    case 'syncing': return { short: 'Sinxronlanmoqda', long: 'Sinxronlanmoqda...', icon: icons.refresh };
+    case 'synced': return { short: 'Sinxronlandi', long: last, icon: icons.cloud };
+    case 'offline': return { short: "Internet yo'q", long: `Internet yo'q. O'zgarishlar internet qaytganda yuboriladi. ${last}.`, icon: icons.cloudOff };
+    case 'error': return { short: 'Xato', long: `${status.message || 'Sinxronlash xatosi'}. ${last}.`, icon: icons.cloudOff };
+    default: return { short: '', long: last, icon: icons.cloud };
+  }
+}
+
+// Bosh sahifadagi belgi va sozlamalardagi matnni yangilaydi
+function updateSyncIndicators(status) {
+  const info = describeSync(status);
+  const chip = document.getElementById('sync-chip');
+  if (chip) {
+    chip.className = `sync-chip sync-${status.state}`;
+    chip.innerHTML = info.short ? `${info.icon}<span>${escapeHtml(info.short)}</span>` : info.icon;
+    chip.setAttribute('aria-label', info.short || 'Sinxronlash');
+  }
+  const text = document.getElementById('sync-info');
+  if (text) text.textContent = info.long;
+  const button = document.getElementById('sync-now');
+  if (button) button.disabled = status.state === 'syncing';
+}
+
+// Bulutdan yangi ma'lumot kelganda ekranni yangilaydi (test yoki oynacha ochiq bo'lsa — tegmaydi)
+async function handleRemoteChange() {
+  if (test) return;
+  if (document.querySelector('dialog[open]')) return;
+  const route = parseRoute();
+  if (route.name === 'home') {
+    render({ keepScroll: true });
+  } else if (route.name === 'section') {
+    const english = document.getElementById('english-input');
+    const meanings = document.getElementById('meanings-input');
+    const typing = (english && english.value) || (meanings && meanings.value);
+    if (!(await storage.getSection(route.id))) {
+      toast("Bu bo'lim boshqa qurilmada o'chirilgan");
+      go('#/');
+    } else if (typing) {
+      renderWordList(await storage.getWords(route.id));
+    } else {
+      render({ keepScroll: true });
+    }
+  }
+}
+
+// Kirish muddati tugaganda: kirish ekraniga qaytaradi (yuborilmagan o'zgarishlar saqlanib qoladi)
+async function handleAuthExpired() {
+  sync.stop();
+  test = null;
+  window.removeEventListener('hashchange', onHashChange);
+  await cloud.signOut();
+  renderSignIn("Kirish muddati tugadi. Qaytadan kiring — yuborilmagan o'zgarishlaringiz saqlanib qolgan.");
+}
+
+// Akkauntdan chiqish: avval oxirgi o'zgarishlar yuboriladi, keyin so'zlar qurilmadan o'chiriladi
+async function handleSignOut() {
+  const ok = await confirmDialog(
+    "Akkauntdan chiqsangiz, so'zlar shu qurilmadan o'chiriladi. Ular bulutda saqlanib qoladi va qayta kirganingizda qaytib keladi.",
+    { title: 'Akkauntdan chiqish', okLabel: 'Chiqish', cancelLabel: 'Bekor qilish', danger: true }
+  );
+  if (!ok) return;
+
+  const hideLoading = showLoading("Oxirgi o'zgarishlar yuborilmoqda...");
+  try {
+    await sync.syncNow({ throwOnError: true });
+  } catch (error) {
+    console.warn(error);
+  } finally {
+    hideLoading();
+  }
+
+  const pending = await storage.countDirty();
+  if (pending > 0) {
+    const sure = await confirmDialog(
+      `${pending} ta o'zgarish bulutga yuborilmadi (${sync.getStatus().message || "internet yo'q"}). Chiqsangiz, ular yo'qoladi. Baribir chiqasizmi?`,
+      { title: 'Diqqat', okLabel: 'Baribir chiqish', cancelLabel: 'Bekor qilish', danger: true }
+    );
+    if (!sure) return;
+  }
+
+  sync.stop();
+  await cloud.signOut();
+  await storage.clearAccountData();
+  location.replace(cloud.getRedirectUri());
+}
+
+// =============================================================
 // Ishga tushirish
 // =============================================================
 
-window.addEventListener('hashchange', onHashChange);
+// Ilovani ishga tushiradi: Google'dan qaytilgan bo'lsa — kirishni yakunlaydi,
+// akkaunt bo'lmasa — kirish ekranini, bo'lsa — ilovani ko'rsatadi
+async function startApp() {
+  let signInError = '';
+  try {
+    const newSession = await cloud.completeSignInFromRedirect();
+    if (newSession) {
+      await prepareAccount(newSession);
+      toast('Xush kelibsiz!');
+    }
+  } catch (error) {
+    console.warn(error);
+    signInError = cloud.getErrorMessage(error);
+  }
+
+  const session = await cloud.getSession();
+  if (!session) {
+    renderSignIn(signInError);
+    return;
+  }
+
+  sync.onStatusChange(updateSyncIndicators);
+  sync.onRemoteChange(handleRemoteChange);
+  sync.onAuthExpired(handleAuthExpired);
+  window.addEventListener('hashchange', onHashChange);
+  await render();
+  sync.start();
+}
+
 importInput.addEventListener('change', handleImportFile);
-render();
+startApp();
 
 // Offline ishlash uchun service worker'ni ro'yxatdan o'tkazamiz
 if ('serviceWorker' in navigator) {

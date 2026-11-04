@@ -5,7 +5,7 @@
 // bittaga oshiring (masalan v1 -> v2), shunda eski kesh tozalanadi.
 // =============================================================
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `soz-yodlash-${CACHE_VERSION}`;
 
 // Offline ishlashi uchun oldindan saqlanadigan fayllar ro'yxati
@@ -19,6 +19,9 @@ const APP_FILES = [
   './js/quiz.js',
   './js/ui.js',
   './js/ai.js',
+  './js/config.js',
+  './js/cloud.js',
+  './js/sync.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png'

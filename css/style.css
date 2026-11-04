@@ -897,3 +897,126 @@ a {
 .card p a {
   color: var(--primary);
 }
+
+/* =============================================================
+   Sinxronlash bosqichi: kirish ekrani, akkaunt, sinxronlash holati
+   ============================================================= */
+
+/* ---------- Kirish ekrani ---------- */
+.signin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px 16px;
+}
+
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.signin-logo {
+  border-radius: 18px;
+}
+
+.signin-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.signin-card .form-error,
+.signin-card .notice {
+  margin: 0;
+}
+
+/* ---------- Sinxronlash holati belgisi (bosh sahifa tepasida) ---------- */
+.sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sync-chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sync-chip.sync-synced {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.sync-chip.sync-syncing {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.sync-chip.sync-syncing svg {
+  animation: spin 1s linear infinite;
+}
+
+.sync-chip.sync-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Juda tor ekranda faqat belgi qoladi */
+@media (max-width: 380px) {
+  .sync-chip span {
+    display: none;
+  }
+}
+
+/* ---------- Akkaunt bloki (sozlamalar) ---------- */
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.account-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.sync-info {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.btn-danger-text {
+  color: var(--danger);
+}
