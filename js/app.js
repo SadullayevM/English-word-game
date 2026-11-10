@@ -295,6 +295,7 @@ async function renderSection(sectionId) {
       </div>
 
       <button type="button" class="btn btn-primary btn-block" id="start-test">${icons.play} Testni boshlash</button>
+      <button type="button" class="btn btn-secondary btn-block" id="merge-sections">${icons.merge} Boshqa bo'limni qo'shish</button>
 
       <form class="card" id="add-form" novalidate autocomplete="off">
         <h2 class="card-title">So'z qo'shish</h2>
@@ -396,6 +397,7 @@ async function renderSection(sectionId) {
     if (deleteButton) await handleDeleteWord(sectionId, deleteButton.dataset.delete);
   });
 
+  document.getElementById('merge-sections').addEventListener('click', () => handleMergeSections(section));
   document.getElementById('rename-section').addEventListener('click', () => handleRenameSection(section));
   document.getElementById('delete-section').addEventListener('click', () => handleDeleteSection(section));
 
@@ -550,6 +552,68 @@ async function handleRenameSection(section) {
   await storage.renameSection(section.id, name);
   render();
   toast("Nom o'zgartirildi");
+}
+
+// So'zning "kaliti": inglizchasi va barcha ma'nolari (tartibsiz, bir xil ko'rinishda).
+// Kalitlari bir xil so'zlar birlashtirishda bitta bo'lib qoladi.
+function wordMergeKey(word) {
+  const meanings = [...new Set(word.meanings.map(normalize).filter(Boolean))].sort();
+  return `${normalize(word.english)}|${meanings.join(',')}`;
+}
+
+// Boshqa bo'limni shu bo'limga qo'shish: bo'lim tanlanadi, tasdiqlanadi va birlashtiriladi
+async function handleMergeSections(target) {
+  // So'zi bor boshqa bo'limlar ro'yxati
+  const sections = (await storage.getSections()).filter((s) => s.id !== target.id);
+  const counts = await Promise.all(sections.map((s) => storage.countWords(s.id)));
+  const options = sections
+    .map((section, i) => ({ section, count: counts[i] }))
+    .filter((item) => item.count > 0);
+
+  if (options.length === 0) {
+    await alertDialog("Qo'shish uchun so'zi bor boshqa bo'lim yo'q.", "Bo'lim topilmadi");
+    return;
+  }
+
+  // 1) Qaysi bo'limni qo'shishni tanlash
+  const choice = await showDialog({
+    title: "Qaysi bo'limni qo'shamiz?",
+    message: `Tanlangan bo'limdagi so'zlar "${target.name}" bo'limiga ko'chiriladi.`,
+    layout: 'list',
+    buttons: [
+      ...options.map((item) => ({
+        label: `${item.section.name} — ${item.count} ta so'z`,
+        value: item.section.id,
+        variant: 'secondary'
+      })),
+      { label: 'Bekor qilish', value: null, variant: 'secondary' }
+    ]
+  });
+  if (!choice || !choice.action) return;
+  const picked = options.find((item) => item.section.id === choice.action);
+  if (!picked) return;
+
+  // 2) Tasdiqlash
+  const ok = await confirmDialog(
+    `"${picked.section.name}" bo'limidagi ${picked.count} ta so'z "${target.name}" bo'limiga ko'chiriladi.\n\n` +
+    `Inglizchasi va ma'nolari to'liq bir xil so'zlar bitta bo'lib qoladi.\n` +
+    `"${picked.section.name}" bo'limi bo'sh holda (faqat nomi bilan) qoladi.\n` +
+    `Ikkala bo'limdagi "O'zlashtirilgan" belgisi olib tashlanadi.\n\nDavom etasizmi?`,
+    { title: "Bo'limlarni birlashtirish", okLabel: 'Birlashtirish', cancelLabel: 'Bekor qilish' }
+  );
+  if (!ok) return;
+
+  // 3) Birlashtirish
+  try {
+    const result = await storage.mergeSections(target.id, picked.section.id, wordMergeKey);
+    await render({ keepScroll: true });
+    toast(result.merged > 0
+      ? `${result.moved} ta so'z qo'shildi, ${result.merged} ta bir xil so'z birlashtirildi`
+      : `${result.moved} ta so'z qo'shildi`);
+  } catch (error) {
+    console.error(error);
+    alertDialog("Bo'limlarni birlashtirib bo'lmadi.", 'Xatolik');
+  }
 }
 
 // Bo'limni o'chirish (tasdiqlash bilan)

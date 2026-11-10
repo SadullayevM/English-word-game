@@ -1020,3 +1020,26 @@ a {
 .btn-danger-text {
   color: var(--danger);
 }
+
+/* =============================================================
+   Bo'limlarni birlashtirish: tanlash ro'yxati
+   ============================================================= */
+
+/* Oynachadagi tugmalar ustma-ust ro'yxat bo'lib turadi */
+.modal-actions-list {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.modal-actions-list .btn {
+  flex: none;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* Oxirgi tugma ("Bekor qilish") markazda */
+.modal-actions-list .btn:last-child {
+  justify-content: center;
+  margin-top: 4px;
+}

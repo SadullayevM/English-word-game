@@ -248,6 +248,101 @@ export async function deleteSection(id) {
   notifyChange();
 }
 
+// Ikki bo'limni birlashtiradi: manba bo'limdagi so'zlar maqsad bo'limga ko'chadi.
+// wordKey(word) — so'zning "kaliti" (inglizchasi + barcha ma'nolari). Kaliti maqsad bo'limdagi
+// biror so'z bilan bir xil bo'lgan so'z ko'chirilmaydi: ikkisi bitta bo'lib qoladi
+// (test tarixlari qo'shiladi). Ma'nolari farq qiladigan so'zlar alohida ko'chiriladi.
+// Manba bo'lim faqat nomi bilan, bo'sh holda qoladi. Ikkala bo'limning "o'zlashtirilgan"
+// belgisi olib tashlanadi (masteredResetAt — shu vaqtgacha bo'lgan sanalar boshqa
+// qurilmalardan qaytib kelmasligi uchun belgi).
+// Qaytaradi: { moved: ko'chirilgan so'zlar soni, merged: bittaga birlashgan so'zlar soni }
+export async function mergeSections(targetId, sourceId, wordKey) {
+  if (targetId === sourceId) throw new Error("Bo'limni o'zi bilan birlashtirib bo'lmaydi");
+  const db = await openDB();
+  const tx = db.transaction(['sections', 'words'], 'readwrite');
+  const sectionsStore = tx.objectStore('sections');
+  const wordsStore = tx.objectStore('words');
+  const bySection = wordsStore.index('bySection');
+
+  const targetReq = sectionsStore.get(targetId);
+  const sourceReq = sectionsStore.get(sourceId);
+  const targetWordsReq = bySection.getAll(targetId);
+  const sourceWordsReq = bySection.getAll(sourceId);
+
+  const result = { moved: 0, merged: 0 };
+  let failed = false;
+  let pending = 4;
+
+  // To'rttala o'qish tugagach, birlashtirishni bajaradi
+  const whenAllRead = () => {
+    pending -= 1;
+    if (pending > 0) return;
+
+    const target = targetReq.result;
+    const source = sourceReq.result;
+    if (!target || target.deleted || !source || source.deleted) {
+      failed = true;
+      return;
+    }
+
+    const now = nowIso();
+    // Maqsad bo'limdagi so'zlar kaliti bo'yicha
+    const targetByKey = new Map();
+    targetWordsReq.result
+      .filter((word) => !word.deleted)
+      .forEach((word) => targetByKey.set(wordKey(word), word));
+    const changedTargets = new Map();
+
+    sourceWordsReq.result
+      .filter((word) => !word.deleted)
+      .forEach((word) => {
+        const key = wordKey(word);
+        const match = targetByKey.get(key);
+        if (match) {
+          // Bir xil so'z: test tarixlarini qo'shamiz, manbadagisini o'chiramiz
+          const seen = new Set();
+          const attempts = [...(match.attempts || []), ...(word.attempts || [])]
+            .filter((a) => {
+              const id = `${a.date}|${a.mode}`;
+              if (seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            })
+            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+          const updated = { ...match, attempts };
+          targetByKey.set(key, updated);
+          changedTargets.set(updated.id, updated);
+          wordsStore.put(touch({ ...word, deleted: true }));
+          result.merged += 1;
+        } else {
+          // Yangi so'z: maqsad bo'limga ko'chiramiz
+          wordsStore.put(touch({ ...word, sectionId: targetId }));
+          result.moved += 1;
+        }
+      });
+
+    changedTargets.forEach((word) => wordsStore.put(touch(word)));
+
+    sectionsStore.put(touch({ ...target, masteredDates: [], masteredResetAt: now }));
+    sectionsStore.put(touch({
+      ...source,
+      masteredDates: [],
+      masteredResetAt: now,
+      lastTestedAt: null,
+      testedResetAt: now
+    }));
+  };
+
+  [targetReq, sourceReq, targetWordsReq, sourceWordsReq].forEach((request) => {
+    request.onsuccess = whenAllRead;
+  });
+
+  await transactionDone(tx);
+  if (failed) throw new Error("Bo'lim topilmadi");
+  notifyChange();
+  return result;
+}
+
 // ---------------- So'zlar ----------------
 
 // Bo'limdagi barcha (o'chirilmagan) so'zlarni qo'shilgan vaqti bo'yicha qaytaradi

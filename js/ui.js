@@ -57,6 +57,7 @@ export const icons = {
   upload: svg('<path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/>'),
   settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   eye: svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),
+  merge: svg('<path d="M6 3v6a6 6 0 0 0 6 6h6"/><path d="M15 12l3 3-3 3"/><path d="M6 21v-6"/>'),
   cloud: svg('<path d="M18 10h-1.3A6 6 0 1 0 7 17h11a4 4 0 0 0 0-8z"/>'),
   cloudOff: svg('<path d="M2 2l20 20"/><path d="M5.8 7.6A6 6 0 0 0 7 17h10"/><path d="M21 15.5A4 4 0 0 0 18 10h-1.3a6 6 0 0 0-7.4-4.3"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>'),
@@ -84,11 +85,12 @@ export function showLoading(text = 'Kuting...') {
 // options: {
 //   title, message,
 //   fields: [{ name, label, value, placeholder, lang }]  — kiritish maydonlari (ixtiyoriy),
-//   buttons: [{ label, value, variant: 'primary'|'secondary'|'danger', submit: true, requireFields: true }]
+//   buttons: [{ label, value, variant: 'primary'|'secondary'|'danger', submit: true, requireFields: true }],
+//   layout: 'list' — tugmalar ustma-ust ro'yxat bo'lib turadi (tanlash uchun)
 // }
 // Natija: { action: bosilgan tugma qiymati, values: { maydon nomi: matn } }
 // Oynacha yopib yuborilsa (Esc yoki "orqaga") — null.
-export function showDialog({ title = '', message = '', fields = [], buttons = [] } = {}) {
+export function showDialog({ title = '', message = '', fields = [], buttons = [], layout = '' } = {}) {
   return new Promise((resolve) => {
     const dialog = document.createElement('dialog');
     dialog.className = 'modal';
@@ -114,7 +116,7 @@ export function showDialog({ title = '', message = '', fields = [], buttons = []
         ${message ? `<p class="modal-message">${escapeHtml(message)}</p>` : ''}
         ${fieldsHtml}
         <p class="form-error" hidden></p>
-        <div class="modal-actions">${buttonsHtml}</div>
+        <div class="modal-actions ${layout === 'list' ? 'modal-actions-list' : ''}">${buttonsHtml}</div>
       </form>`;
 
     const form = dialog.querySelector('form');

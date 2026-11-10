@@ -5,7 +5,7 @@
 // bittaga oshiring (masalan v1 -> v2), shunda eski kesh tozalanadi.
 // =============================================================
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `soz-yodlash-${CACHE_VERSION}`;
 
 // Offline ishlashi uchun oldindan saqlanadigan fayllar ro'yxati

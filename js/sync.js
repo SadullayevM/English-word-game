@@ -79,6 +79,19 @@ function union(listA, listB, keyFn) {
   return [...map.values()];
 }
 
+// Ikki vaqtdan kechrog'ini qaytaradi (biri bo'lmasa — ikkinchisini, ikkalasi ham bo'lmasa — null)
+function latest(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+// Qiymat bo'lsa — maydonga yozadi, bo'lmasa — maydonni olib tashlaydi
+function setOrRemove(record, field, value) {
+  if (value) record[field] = value;
+  else delete record[field];
+}
+
 // Yozuvning faqat mazmunini (sinxronlash belgilarisiz) solishtirish uchun matnga aylantiradi
 function contentKey(record) {
   const { dirty, serverUpdatedAt, ...rest } = record;
@@ -88,7 +101,8 @@ function contentKey(record) {
 // Bitta yozuvning mahalliy va bulutdagi nusxasini birlashtiradi.
 // Qoida: yangiroq (updatedAt kattaroq) nusxa yutadi. Istisnolar:
 //   so'z — test natijalari (attempts) ikkala nusxadan qo'shiladi;
-//   bo'lim — o'zlashtirilgan sanalar qo'shiladi, oxirgi test sanasi — kechrog'i.
+//   bo'lim — o'zlashtirilgan sanalar qo'shiladi, oxirgi test sanasi — kechrog'i
+//   (bo'limlar birlashtirilgandan oldingi sanalar hisobga olinmaydi).
 // Qaytaradi: saqlanadigan yozuv yoki null (mahalliy yozuv o'zgarmasa).
 function mergeRecord(kind, local, remoteRaw) {
   const { serverUpdatedAt, dirty, ...remote } = remoteRaw;
@@ -106,8 +120,20 @@ function mergeRecord(kind, local, remoteRaw) {
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   }
   if (kind === 'sections') {
-    merged.masteredDates = union(local.masteredDates, remote.masteredDates, (d) => d).sort();
-    const tested = [local.lastTestedAt, remote.lastTestedAt].filter(Boolean).sort();
+    // Bo'limlar birlashtirilganda belgilar tozalanadi (masteredResetAt / testedResetAt).
+    // Shu vaqtdan oldingi sanalar boshqa qurilmadan qaytib kelmasligi kerak.
+    const masteredReset = latest(local.masteredResetAt, remote.masteredResetAt);
+    const testedReset = latest(local.testedResetAt, remote.testedResetAt);
+    setOrRemove(merged, 'masteredResetAt', masteredReset);
+    setOrRemove(merged, 'testedResetAt', testedReset);
+
+    merged.masteredDates = union(local.masteredDates, remote.masteredDates, (d) => d)
+      .filter((d) => !masteredReset || d > masteredReset)
+      .sort();
+    const tested = [local.lastTestedAt, remote.lastTestedAt]
+      .filter(Boolean)
+      .filter((d) => !testedReset || d > testedReset)
+      .sort();
     merged.lastTestedAt = tested.length ? tested[tested.length - 1] : null;
   }
 
